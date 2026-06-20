@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react'
+import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react'
 import { WeightConfig, Requirement, Order, Teacher } from '@/types'
 import { defaultWeightConfig } from '@/utils/scoring'
 import { ordersData, teachersData } from '@/data'
@@ -14,7 +14,7 @@ interface AppContextType {
   addOrder: (order: Order) => void
   addOrders: (newOrders: Order[]) => void
   cancelOrder: (orderId: string, cancelHourIndex?: number) => void
-  convertTrialToConfirmed: (orderId: string, price: number) => void
+  convertTrialToConfirmed: (orderId: string, price: number, pricePerHour: number) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -43,103 +43,111 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>(ordersData)
   const [teachers] = useState<Teacher[]>(teachersData)
 
-  const getTeacherById = (id: string): Teacher | undefined => {
+  const getTeacherById = useCallback((id: string): Teacher | undefined => {
     return teachers.find(t => t.id === id)
-  }
+  }, [teachers])
 
-  const addOrder = (order: Order) => {
+  const addOrder = useCallback((order: Order) => {
     setOrders(prev => [order, ...prev])
-    console.log('[AppContext] 新增订单:', order)
-  }
+  }, [])
 
-  const addOrders = (newOrders: Order[]) => {
+  const addOrders = useCallback((newOrders: Order[]) => {
     setOrders(prev => [...newOrders, ...prev])
-    console.log('[AppContext] 批量新增订单:', newOrders)
-  }
+  }, [])
 
-  const cancelOrder = (orderId: string, cancelHourIndex?: number) => {
-    console.log('[AppContext] 请求取消订单:', orderId, '取消时段索引:', cancelHourIndex)
+  const cancelOrder = useCallback((orderId: string, cancelHourIndex?: number) => {
+    console.log('[AppContext] 取消订单:', orderId, '取消时段索引:', cancelHourIndex)
 
     setOrders(prev => {
-      const targetOrder = prev.find(o => o.id === orderId)
-      if (!targetOrder) {
-        console.error('[AppContext] 未找到订单:', orderId)
-        return prev
-      }
+      const target = prev.find(o => o.id === orderId)
+      if (!target) return prev
 
-      const startMin = timeToMinutes(targetOrder.startTime)
-      const endMin = timeToMinutes(targetOrder.endTime)
-      const totalHours = (endMin - startMin) / 60
+      const startMin = timeToMinutes(target.startTime)
+      const endMin = timeToMinutes(target.endTime)
+      const totalHours = Math.round((endMin - startMin) / 60)
+      const isLongCourse = target.isMerged && totalHours > 1 && cancelHourIndex !== undefined
 
-      if (!targetOrder.isMerged || totalHours <= 1) {
-        console.log('[AppContext] 单小时订单，直接取消')
+      if (!isLongCourse) {
         return prev.map(o =>
           o.id === orderId ? { ...o, status: 'cancelled' as const } : o
         )
       }
 
-      const hourToCancel = cancelHourIndex ?? Math.floor(totalHours / 2)
-      console.log('[AppContext] 取消合并订单中第', hourToCancel + 1, '个小时')
+      const h = cancelHourIndex!
+      const teacher = getTeacherById(target.teacherId)
+      const pph = teacher?.pricePerHour || Math.round(target.price / totalHours)
 
-      const teacher = getTeacherById(targetOrder.teacherId)
-      const pricePerHour = teacher?.pricePerHour || Math.round(targetOrder.price / totalHours)
+      const cancelStart = startMin + h * 60
+      const cancelEnd = cancelStart + 60
+      const cancelledOrder: Order = {
+        id: `${target.id}_cancel_${h}`,
+        teacherId: target.teacherId,
+        teacherName: target.teacherName,
+        teacherAvatar: target.teacherAvatar,
+        subject: target.subject,
+        grade: target.grade,
+        date: target.date,
+        startTime: minutesToTime(cancelStart),
+        endTime: minutesToTime(cancelEnd),
+        status: 'cancelled',
+        price: pph,
+        address: target.address,
+        isMerged: false,
+        createdAt: target.createdAt
+      }
 
-      const beforeHours = hourToCancel
-      const afterHours = totalHours - hourToCancel - 1
+      const newOrders: Order[] = [cancelledOrder]
 
-      let newOrdersList = prev.map(o =>
-        o.id === orderId ? { ...o, status: 'cancelled' as const } : o
-      )
-
-      const now = Date.now()
-      const newOrderObjs: Order[] = []
+      const beforeHours = h
+      const afterHours = totalHours - h - 1
 
       if (beforeHours > 0) {
-        const segStart = startMin
-        const segEnd = startMin + beforeHours * 60
-        newOrderObjs.push({
-          id: `o${now}_before`,
-          teacherId: targetOrder.teacherId,
-          teacherName: targetOrder.teacherName,
-          teacherAvatar: targetOrder.teacherAvatar,
-          subject: targetOrder.subject,
-          grade: targetOrder.grade,
-          date: targetOrder.date,
-          startTime: minutesToTime(segStart),
-          endTime: minutesToTime(segEnd),
-          status: 'confirmed' as const,
-          price: pricePerHour * beforeHours,
-          address: targetOrder.address,
-          isMerged: beforeHours > 1
+        newOrders.push({
+          id: `${target.id}_before`,
+          teacherId: target.teacherId,
+          teacherName: target.teacherName,
+          teacherAvatar: target.teacherAvatar,
+          subject: target.subject,
+          grade: target.grade,
+          date: target.date,
+          startTime: minutesToTime(startMin),
+          endTime: minutesToTime(startMin + beforeHours * 60),
+          status: 'confirmed',
+          price: pph * beforeHours,
+          address: target.address,
+          isMerged: beforeHours > 1,
+          createdAt: target.createdAt
         })
       }
 
       if (afterHours > 0) {
-        const segStart = startMin + (hourToCancel + 1) * 60
-        const segEnd = endMin
-        newOrderObjs.push({
-          id: `o${now}_after`,
-          teacherId: targetOrder.teacherId,
-          teacherName: targetOrder.teacherName,
-          teacherAvatar: targetOrder.teacherAvatar,
-          subject: targetOrder.subject,
-          grade: targetOrder.grade,
-          date: targetOrder.date,
-          startTime: minutesToTime(segStart),
-          endTime: minutesToTime(segEnd),
-          status: 'confirmed' as const,
-          price: pricePerHour * afterHours,
-          address: targetOrder.address,
-          isMerged: afterHours > 1
+        const afterStart = startMin + (h + 1) * 60
+        newOrders.push({
+          id: `${target.id}_after`,
+          teacherId: target.teacherId,
+          teacherName: target.teacherName,
+          teacherAvatar: target.teacherAvatar,
+          subject: target.subject,
+          grade: target.grade,
+          date: target.date,
+          startTime: minutesToTime(afterStart),
+          endTime: minutesToTime(endMin),
+          status: 'confirmed',
+          price: pph * afterHours,
+          address: target.address,
+          isMerged: afterHours > 1,
+          createdAt: target.createdAt
         })
       }
 
-      console.log('[AppContext] 拆分后新增订单:', newOrderObjs)
-      return [...newOrderObjs, ...newOrdersList]
-    })
-  }
+      console.log('[AppContext] 拆分 - 取消:', minutesToTime(cancelStart), '-', minutesToTime(cancelEnd), '| 剩余:', newOrders.filter(o => o.status !== 'cancelled').map(o => `${o.startTime}-${o.endTime}`))
 
-  const convertTrialToConfirmed = (orderId: string, price: number, pricePerHour: number) => {
+      const filtered = prev.filter(o => o.id !== orderId)
+      return [...newOrders, ...filtered]
+    })
+  }, [getTeacherById])
+
+  const convertTrialToConfirmed = useCallback((orderId: string, price: number, pricePerHour: number) => {
     console.log('[AppContext] 试听课转正式课:', orderId, '总价:', price, '单价:', pricePerHour)
     setOrders(prev =>
       prev.map(o => {
@@ -158,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
     )
-  }
+  }, [])
 
   const value = useMemo(() => ({
     weightConfig,
@@ -172,7 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addOrders,
     cancelOrder,
     convertTrialToConfirmed
-  }), [weightConfig, currentRequirement, orders, teachers])
+  }), [weightConfig, currentRequirement, orders, teachers, getTeacherById, addOrder, addOrders, cancelOrder, convertTrialToConfirmed])
 
   return (
     <AppContext.Provider value={value}>
