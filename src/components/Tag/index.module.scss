@@ -1,0 +1,101 @@
+@use '@/styles/variables.scss' as *;
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-sm;
+  white-space: nowrap;
+
+  &.small {
+    padding: 4rpx 12rpx;
+  }
+
+  &.medium {
+    padding: 8rpx 16rpx;
+  }
+
+  .text {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    line-height: 1.2;
+  }
+}
+
+.tagPrimary {
+  background: rgba($color-primary, 0.1);
+  .text { color: $color-primary; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-primary;
+  }
+}
+
+.tagSuccess {
+  background: rgba($color-success, 0.1);
+  .text { color: $color-success; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-success;
+  }
+}
+
+.tagWarning {
+  background: rgba($color-warning, 0.15);
+  .text { color: $color-warning; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-warning;
+  }
+}
+
+.tagError {
+  background: rgba($color-error, 0.1);
+  .text { color: $color-error; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-error;
+  }
+}
+
+.tagInfo {
+  background: rgba($color-info, 0.1);
+  .text { color: $color-info; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-info;
+  }
+}
+
+.tagPurple {
+  background: rgba($color-subject, 0.1);
+  .text { color: $color-subject; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-subject;
+  }
+}
+
+.tagOrange {
+  background: rgba($color-price, 0.1);
+  .text { color: $color-price; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-price;
+  }
+}
+
+.tagCyan {
+  background: rgba($color-distance, 0.1);
+  .text { color: $color-distance; }
+  &.outlined {
+    background: transparent;
+    border: 1rpx solid $color-distance;
+  }
+}
+
+.outlined {
+  .text {
+    font-weight: $font-weight-normal;
+  }
+}

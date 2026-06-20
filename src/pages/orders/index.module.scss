@@ -1,0 +1,187 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding-bottom: 120rpx;
+}
+
+.tabBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: $color-bg-card;
+  padding: $spacing-sm $page-padding;
+  box-shadow: $shadow-float;
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.tabItem {
+  flex: 1;
+  padding: $spacing-sm 0;
+  border-radius: $radius-button;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.active {
+    background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+
+    .tabText {
+      color: $color-text-white;
+      font-weight: $font-weight-semibold;
+    }
+  }
+}
+
+.tabText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.content {
+  padding: $spacing-md $page-padding;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md 0;
+}
+
+.sectionTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.sectionCount {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.scheduleCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-card;
+  margin-bottom: $spacing-lg;
+}
+
+.scheduleTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+  display: block;
+}
+
+.scheduleRow {
+  display: flex;
+  align-items: center;
+  padding: $spacing-sm 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.scheduleTime {
+  width: 160rpx;
+  flex-shrink: 0;
+}
+
+.scheduleTimeText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: block;
+}
+
+.scheduleDate {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.scheduleInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduleSubject {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.scheduleTeacher {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.scheduleStatus {
+  flex-shrink: 0;
+  margin-left: $spacing-sm;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+}
+
+.emptyIcon {
+  font-size: 100rpx;
+  margin-bottom: $spacing-md;
+}
+
+.emptyText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+  margin-bottom: $spacing-lg;
+}
+
+.emptyBtn {
+  @include button-reset;
+  height: $button-height-md;
+  padding: 0 $spacing-xl;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  border-radius: $radius-button;
+}
+
+.emptyBtnText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.mergeTip {
+  background: rgba($color-success, 0.08);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  margin-bottom: $spacing-md;
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-sm;
+}
+
+.mergeTipIcon {
+  font-size: $font-size-lg;
+}
+
+.mergeTipText {
+  font-size: $font-size-sm;
+  color: $color-success;
+  line-height: $line-height-normal;
+  flex: 1;
+}

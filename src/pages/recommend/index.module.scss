@@ -1,0 +1,159 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding-bottom: 120rpx;
+}
+
+.filterBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: $color-bg-card;
+  padding: $spacing-md $page-padding;
+  box-shadow: $shadow-float;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.filterItem {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+  background: $color-bg-hover;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.active {
+    background: rgba($color-primary, 0.1);
+  }
+}
+
+.filterText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.filterItem.active .filterText {
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.filterArrow {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.weightBtn {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  margin-left: auto;
+}
+
+.weightBtnText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.content {
+  padding: $spacing-md $page-padding;
+}
+
+.resultInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-sm 0 $spacing-md;
+}
+
+.resultCount {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.resultCountNum {
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+}
+
+.sortBy {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.teacherList {
+  display: flex;
+  flex-direction: column;
+}
+
+.scorePanel {
+  position: fixed;
+  right: $page-padding;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+}
+
+.legendCard {
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  box-shadow: $shadow-popup;
+  width: 200rpx;
+}
+
+.legendTitle {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-sm;
+  display: block;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  margin-bottom: $spacing-xs;
+}
+
+.legendDot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: $radius-round;
+  flex-shrink: 0;
+}
+
+.legendText {
+  font-size: 20rpx;
+  color: $color-text-secondary;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+}
+
+.emptyIcon {
+  font-size: 100rpx;
+  margin-bottom: $spacing-md;
+}
+
+.emptyText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}

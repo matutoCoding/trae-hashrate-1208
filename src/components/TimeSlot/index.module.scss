@@ -1,0 +1,106 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  padding: 0;
+}
+
+.dateGroup {
+  margin-bottom: $spacing-lg;
+}
+
+.dateLabel {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+  display: block;
+}
+
+.slotsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.slot {
+  width: calc((100% - 3 * #{$spacing-sm}) / 4);
+  padding: $spacing-sm 0;
+  border-radius: $radius-sm;
+  background: $color-bg-hover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.disabled {
+    background: $color-bg-page;
+    opacity: 0.5;
+
+    .slotTime {
+      color: $color-text-disabled;
+      text-decoration: line-through;
+    }
+  }
+
+  &.selected {
+    background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+
+    .slotTime {
+      color: $color-text-white;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.slotTime {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.mergedInfo {
+  background: rgba($color-primary, 0.05);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  margin-top: $spacing-md;
+}
+
+.mergedTitle {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+  margin-bottom: $spacing-sm;
+  display: block;
+}
+
+.mergedItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-xs 0;
+}
+
+.mergedDate {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.mergedTime {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.mergeBadge {
+  background: rgba($color-success, 0.15);
+  padding: 2rpx 12rpx;
+  border-radius: $radius-xs;
+}
+
+.mergeText {
+  font-size: 20rpx;
+  color: $color-success;
+}

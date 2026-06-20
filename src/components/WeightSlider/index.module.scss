@@ -1,0 +1,41 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  margin-bottom: $spacing-lg;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-sm;
+}
+
+.label {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+.valueBadge {
+  min-width: 80rpx;
+  padding: 4rpx 16rpx;
+  border-radius: $radius-xs;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.valueText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+}
+
+.sliderWrap {
+  padding: 0;
+}
+
+.slider {
+  margin: 0;
+}
