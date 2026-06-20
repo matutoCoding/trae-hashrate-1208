@@ -26,8 +26,18 @@ const RecommendPage: React.FC = () => {
     Taro.navigateTo({ url: '/pages/weight-config/index' })
   }
 
-  const handleToggleScoreDetail = (teacherId: string) => {
+  const handleToggleScoreDetail = (e: any, teacherId: string) => {
+    e.stopPropagation()
     setShowScoreDetail(showScoreDetail === teacherId ? null : teacherId)
+  }
+
+  const handleGoDetail = (e: any, teacherId: string) => {
+    e.stopPropagation()
+    Taro.navigateTo({ url: `/pages/teacher-detail/index?id=${teacherId}` })
+  }
+
+  const handleCardClick = (teacherId: string) => {
+    Taro.navigateTo({ url: `/pages/teacher-detail/index?id=${teacherId}` })
   }
 
   return (
@@ -71,16 +81,42 @@ const RecommendPage: React.FC = () => {
           <View className={styles.teacherList}>
             {sortedTeachers.map((item, index) => (
               <View key={item.teacher.id}>
-                <TeacherCard
-                  teacher={item.teacher}
-                  score={item.score}
-                  rank={index + 1}
-                  onClick={() => handleToggleScoreDetail(item.teacher.id)}
-                />
+                <View onClick={() => handleCardClick(item.teacher.id)}>
+                  <TeacherCard
+                    teacher={item.teacher}
+                    score={item.score}
+                    rank={index + 1}
+                    onClick={() => {}}
+                  />
+                </View>
+                <View className={styles.cardActions}>
+                  <View
+                    className={styles.actionBtn}
+                    onClick={(e) => handleToggleScoreDetail(e, item.teacher.id)}
+                  >
+                    <Text className={styles.actionBtnText}>
+                      {showScoreDetail === item.teacher.id ? '收起评分' : '查看评分明细'}
+                    </Text>
+                  </View>
+                  <View
+                    className={styles.actionBtnPrimary}
+                    onClick={(e) => handleGoDetail(e, item.teacher.id)}
+                  >
+                    <Text className={styles.actionBtnPrimaryText}>进入详情</Text>
+                  </View>
+                </View>
                 {showScoreDetail === item.teacher.id && (
-                  <View className={styles.scorePanel} style={{ display: 'block' }}>
+                  <View className={styles.scorePanel}>
                     <View className={styles.legendCard}>
-                      <Text className={styles.legendTitle}>评分明细</Text>
+                      <View className={styles.legendHeader}>
+                        <Text className={styles.legendTitle}>评分明细</Text>
+                        <Text
+                          className={styles.legendGoDetail}
+                          onClick={(e) => handleGoDetail(e, item.teacher.id)}
+                        >
+                          进入详情 →
+                        </Text>
+                      </View>
                       <ScoreBar
                         label='科目匹配'
                         score={item.score.subjectMatch}

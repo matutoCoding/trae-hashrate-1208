@@ -15,10 +15,10 @@ const TeacherDetailPage: React.FC = () => {
   const router = useRouter()
   const teacherId = router.params?.id || 't001'
 
-  const { getTeacherById, teachers, orders, currentRequirement, weightConfig, addOrders } = useAppContext()
+  const { getTeacherById, teachers, orders, currentRequirement, weightConfig, addOrders, addOrder } = useAppContext()
 
   const [showTrialPicker, setShowTrialPicker] = useState(false)
-  const [trialSelectedSlots, setTrialSelectedSlots] = useState<string[]>([])
+  const [trialSelectedSlot, setTrialSelectedSlot] = useState<string>('')
   const [bookSelectedSlots, setBookSelectedSlots] = useState<string[]>([])
 
   const teacher = useMemo(() => {
@@ -64,10 +64,15 @@ const TeacherDetailPage: React.FC = () => {
     console.log('[TeacherDetail] 分组时段:', groups)
 
     const now = Date.now()
-    const newOrders: Order[] = groups.map((group, idx) => {
-      const allSlotIds = group.slotIds
-      const orderId = `o${now}_${idx}`
+    const newOrders: Order[] = groups.map((group, gIdx) => {
       const hourCount = group.hourCount
+      const orderId = `o${now}_${gIdx}`
+
+      const segmentIds: string[] = []
+      for (let i = 0; i < hourCount; i++) {
+        segmentIds.push(`${orderId}_seg_${i}`)
+      }
+
       return {
         id: orderId,
         teacherId: teacher.id,
@@ -82,72 +87,17 @@ const TeacherDetailPage: React.FC = () => {
         price: teacher.pricePerHour * hourCount,
         address: currentRequirement?.location?.address || '北京市朝阳区望京',
         isMerged: hourCount > 1,
-        mergedOrderIds: hourCount > 1 ? [`${orderId}_base`] : undefined
+        mergedOrderIds: hourCount > 1 ? segmentIds : undefined
       }
     })
 
-    if (newOrders.length === 1 && newOrders[0].isMerged) {
-      const o = newOrders[0]
-      const hourCount = groups[0].hourCount
-      const segOrders: Order[] = []
-      for (let i = 0; i < hourCount; i++) {
-        const segId = `seg${now}_0_${i}`
-        const startH = parseInt(o.startTime.split(':')[0]) + i
-        const endH = startH + 1
-        segOrders.push({
-          id: segId,
-          teacherId: o.teacherId,
-          teacherName: o.teacherName,
-          teacherAvatar: o.teacherAvatar,
-          subject: o.subject,
-          grade: o.grade,
-          date: o.date,
-          startTime: `${startH.toString().padStart(2, '0')}:00`,
-          endTime: `${endH.toString().padStart(2, '0')}:00`,
-          status: 'confirmed' as const,
-          price: teacher.pricePerHour,
-          address: o.address,
-          isMerged: true,
-          mergedOrderIds: Array.from({ length: hourCount }, (_, j) => `seg${now}_0_${j}`)
-        })
-      }
-      addOrders(segOrders)
-    } else if (newOrders.length > 1) {
-      const allSegOrders: Order[] = []
-      groups.forEach((group, gIdx) => {
-        const hourCount = group.hourCount
-        const groupSegIds: string[] = []
-        for (let i = 0; i < hourCount; i++) {
-          const segId = `seg${now}_${gIdx}_${i}`
-          groupSegIds.push(segId)
-        }
-        for (let i = 0; i < hourCount; i++) {
-          const startH = parseInt(group.startTime.split(':')[0]) + i
-          const endH = startH + 1
-          allSegOrders.push({
-            id: groupSegIds[i],
-            teacherId: teacher.id,
-            teacherName: teacher.name,
-            teacherAvatar: teacher.avatar,
-            subject: teacher.subjects[0],
-            grade: currentRequirement?.grade || '高一',
-            date: group.date,
-            startTime: `${startH.toString().padStart(2, '0')}:00`,
-            endTime: `${endH.toString().padStart(2, '0')}:00`,
-            status: 'confirmed' as const,
-            price: teacher.pricePerHour,
-            address: currentRequirement?.location?.address || '北京市朝阳区望京',
-            isMerged: true,
-            mergedOrderIds: groupSegIds
-          })
-        }
-      })
-      addOrders(allSegOrders)
+    if (newOrders.length === 1) {
+      addOrder(newOrders[0])
     } else {
       addOrders(newOrders)
     }
 
-    console.log('[TeacherDetail] 预约成功，时段:', bookSelectedSlots)
+    console.log('[TeacherDetail] 预约成功，订单:', newOrders)
     Taro.showToast({ title: '预约成功', icon: 'success' })
     setBookSelectedSlots([])
     setTimeout(() => {
@@ -157,19 +107,28 @@ const TeacherDetailPage: React.FC = () => {
 
   const handleTrialClick = () => {
     setShowTrialPicker(true)
-    setTrialSelectedSlots([])
+    setTrialSelectedSlot('')
+  }
+
+  const handleTrialSlotChange = (ids: string[]) => {
+    if (ids.length > 1) {
+      const latest = ids[ids.length - 1]
+      setTrialSelectedSlot(latest)
+    } else if (ids.length === 1) {
+      setTrialSelectedSlot(ids[0])
+    } else {
+      setTrialSelectedSlot('')
+    }
   }
 
   const handleConfirmTrial = () => {
-    if (trialSelectedSlots.length === 0) {
-      Taro.showToast({ title: '请选择试听时段', icon: 'none' })
+    if (!trialSelectedSlot) {
+      Taro.showToast({ title: '请选择一个试听时段', icon: 'none' })
       return
     }
 
-    const selectedSlotObjs = slots.filter(s => trialSelectedSlots.includes(s.id))
-    const firstSlot = selectedSlotObjs[0]
-    const hourCount = selectedSlotObjs.length
-    const lastSlot = selectedSlotObjs[hourCount - 1]
+    const slot = slots.find(s => s.id === trialSelectedSlot)
+    if (!slot) return
 
     const trialOrder: Order = {
       id: `trial${Date.now()}`,
@@ -178,20 +137,20 @@ const TeacherDetailPage: React.FC = () => {
       teacherAvatar: teacher.avatar,
       subject: teacher.subjects[0],
       grade: currentRequirement?.grade || '高一',
-      date: firstSlot.date,
-      startTime: firstSlot.startTime,
-      endTime: lastSlot.endTime,
+      date: slot.date,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
       status: 'trial',
       price: 0,
       address: currentRequirement?.location?.address || '北京市朝阳区望京',
-      isMerged: hourCount > 1
+      isMerged: false
     }
 
-    addOrders([trialOrder])
+    addOrder(trialOrder)
     console.log('[TeacherDetail] 试听申请已提交:', trialOrder)
     Taro.showToast({ title: '试听申请已提交', icon: 'success' })
     setShowTrialPicker(false)
-    setTrialSelectedSlots([])
+    setTrialSelectedSlot('')
     setTimeout(() => {
       Taro.switchTab({ url: '/pages/orders/index' })
     }, 1000)
@@ -270,7 +229,7 @@ const TeacherDetailPage: React.FC = () => {
         </View>
 
         <View className={styles.sectionCard}>
-          <Text className={styles.sectionTitle}>选择时段（连续时段合并成一节课，不连续分别生成订单）</Text>
+          <Text className={styles.sectionTitle}>选择时段（连续时段合并为一节长课，不连续/跨日期分别生成课程）</Text>
           <TimeSlotPicker
             slots={slots}
             selectedIds={bookSelectedSlots}
@@ -279,7 +238,7 @@ const TeacherDetailPage: React.FC = () => {
           {bookSelectedSlots.length > 0 && (
             <View className={styles.slotSummary}>
               <Text className={styles.summaryText}>
-                已选 {bookSelectedSlots.length} 个时段 · 连续将合并 · 预计 ¥{teacher.pricePerHour * bookSelectedSlots.length}
+                已选 {bookSelectedSlots.length} 个时段 · 共生成 {groupSelectedSlotsByContinuous(slots.filter(s => bookSelectedSlots.includes(s.id))).length} 条课程 · 预计 ¥{teacher.pricePerHour * bookSelectedSlots.length}
               </Text>
             </View>
           )}
@@ -299,15 +258,22 @@ const TeacherDetailPage: React.FC = () => {
         <View className={styles.modalOverlay}>
           <View className={styles.modalContent}>
             <View className={styles.modalHeader}>
-              <Text className={styles.modalTitle}>选择试听时段（1小时）</Text>
+              <Text className={styles.modalTitle}>选择试听时段（限1小时）</Text>
               <Text className={styles.modalClose} onClick={() => setShowTrialPicker(false)}>×</Text>
             </View>
             <View className={styles.modalBody}>
               <TimeSlotPicker
                 slots={slots}
-                selectedIds={trialSelectedSlots}
-                onChange={setTrialSelectedSlots}
+                selectedIds={trialSelectedSlot ? [trialSelectedSlot] : []}
+                onChange={handleTrialSlotChange}
               />
+              {trialSelectedSlot && (
+                <View className={styles.trialSummary}>
+                  <Text className={styles.trialSummaryText}>
+                    已选择：{slots.find(s => s.id === trialSelectedSlot)?.date} {slots.find(s => s.id === trialSelectedSlot)?.startTime} - {slots.find(s => s.id === trialSelectedSlot)?.endTime}
+                  </Text>
+                </View>
+              )}
             </View>
             <View className={styles.modalFooter}>
               <Button className={styles.modalCancelBtn} onClick={() => setShowTrialPicker(false)}>

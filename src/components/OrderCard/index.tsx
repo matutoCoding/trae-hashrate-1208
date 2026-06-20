@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { View, Text, Image, Button } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import classnames from 'classnames'
@@ -8,7 +8,7 @@ import styles from './index.module.scss'
 
 interface OrderCardProps {
   order: Order
-  onCancel?: (orderId: string) => void
+  onCancel?: (orderId: string, cancelHourIndex?: number) => void
   onConvertTrial?: (orderId: string) => void
   onClick?: () => void
 }
@@ -21,17 +21,43 @@ const statusMap: Record<Order['status'], { label: string; color: 'primary' | 'su
   trial: { label: '试听课', color: 'info' }
 }
 
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+}
+
 const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, onClick }) => {
   const status = statusMap[order.status]
+  const [showHourPicker, setShowHourPicker] = useState(false)
+  const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(null)
 
-  const handleCancel = (e: any) => {
+  const startMin = timeToMinutes(order.startTime)
+  const endMin = timeToMinutes(order.endTime)
+  const totalHours = (endMin - startMin) / 60
+  const hourOptions: Array<{ index: number; label: string }> = []
+  for (let i = 0; i < totalHours; i++) {
+    const s = minutesToTime(startMin + i * 60)
+    const e = minutesToTime(startMin + (i + 1) * 60)
+    hourOptions.push({ index: i, label: `${s} - ${e}` })
+  }
+
+  const handleCancelClick = (e: any) => {
     e.stopPropagation()
-    if (onCancel) {
+    if (!onCancel) return
+
+    if (order.isMerged && totalHours > 1) {
+      setShowHourPicker(true)
+      setSelectedHourIndex(null)
+    } else {
       Taro.showModal({
         title: '确认取消',
-        content: order.isMerged
-          ? '这是连时段课程，取消当前时段后剩余时段将自动拆分显示。是否继续？'
-          : '确定要取消这节课程吗？取消后时段将自动释放。',
+        content: '确定要取消这节课程吗？取消后时段将自动释放。',
         confirmColor: '#F53F3F',
         success: (res) => {
           if (res.confirm) {
@@ -41,6 +67,25 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
         }
       })
     }
+  }
+
+  const handleConfirmCancelHour = () => {
+    if (selectedHourIndex === null) {
+      Taro.showToast({ title: '请选择要取消的时段', icon: 'none' })
+      return
+    }
+    Taro.showModal({
+      title: '确认取消',
+      content: `确定要取消 ${hourOptions[selectedHourIndex].label} 这节课吗？剩余时段将自动拆分显示。`,
+      confirmColor: '#F53F3F',
+      success: (res) => {
+        if (res.confirm) {
+          onCancel!(order.id, selectedHourIndex)
+          setShowHourPicker(false)
+          Taro.showToast({ title: '已取消', icon: 'success' })
+        }
+      }
+    })
   }
 
   const handleConvertTrial = (e: any) => {
@@ -73,8 +118,8 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
             <View className={styles.subjectRow}>
               <Tag text={order.subject} color='purple' size='small' />
               <Tag text={order.grade} color='info' size='small' outlined />
-              {order.isMerged && (
-                <Tag text='连时段' color='cyan' size='small' />
+              {order.isMerged && totalHours > 1 && (
+                <Tag text={`连订${totalHours}节`} color='cyan' size='small' />
               )}
             </View>
           </View>
@@ -112,7 +157,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
         <View className={styles.footer}>
           <Button
             className={classnames(styles.btn, styles.cancelBtn)}
-            onClick={handleCancel}
+            onClick={handleCancelClick}
           >
             <Text className={styles.cancelText}>取消课程</Text>
           </Button>
@@ -126,6 +171,44 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
               <Text className={styles.primaryText}>联系老师</Text>
             </Button>
           )}
+        </View>
+      )}
+
+      {showHourPicker && (
+        <View className={styles.modalOverlay}>
+          <View className={styles.modalContent}>
+            <View className={styles.modalHeader}>
+              <Text className={styles.modalTitle}>选择要取消的时段</Text>
+              <Text className={styles.modalClose} onClick={() => setShowHourPicker(false)}>×</Text>
+            </View>
+            <View className={styles.modalBody}>
+              <Text className={styles.modalDesc}>
+                这是{totalHours}节连订的长课（{order.startTime}-{order.endTime}），请选择要取消的单小时时段，剩余时段将自动拆分。
+              </Text>
+              <View className={styles.hourOptions}>
+                {hourOptions.map(opt => (
+                  <View
+                    key={opt.index}
+                    className={classnames(
+                      styles.hourOption,
+                      selectedHourIndex === opt.index && styles.hourOptionActive
+                    )}
+                    onClick={() => setSelectedHourIndex(opt.index)}
+                  >
+                    <Text className={styles.hourOptionText}>{opt.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+            <View className={styles.modalFooter}>
+              <Button className={styles.modalCancelBtn} onClick={() => setShowHourPicker(false)}>
+                <Text>返回</Text>
+              </Button>
+              <Button className={styles.modalConfirmBtn} onClick={handleConfirmCancelHour}>
+                <Text>确认取消该时段</Text>
+              </Button>
+            </View>
+          </View>
         </View>
       )}
     </View>

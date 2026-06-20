@@ -290,3 +290,16 @@
   font-weight: $font-weight-semibold;
   color: $color-text-white;
 }
+
+.trialSummary {
+  margin-top: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba($color-primary, 0.06);
+  border-radius: $radius-sm;
+}
+
+.trialSummaryText {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}

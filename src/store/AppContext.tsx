@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, ReactNode, useMemo } from '
 import { WeightConfig, Requirement, Order, Teacher } from '@/types'
 import { defaultWeightConfig } from '@/utils/scoring'
 import { ordersData, teachersData } from '@/data'
-import { splitMergedGroup } from '@/utils/schedule'
 
 interface AppContextType {
   weightConfig: WeightConfig
@@ -14,11 +13,22 @@ interface AppContextType {
   getTeacherById: (id: string) => Teacher | undefined
   addOrder: (order: Order) => void
   addOrders: (newOrders: Order[]) => void
-  cancelOrder: (orderId: string) => void
+  cancelOrder: (orderId: string, cancelHourIndex?: number) => void
   convertTrialToConfirmed: (orderId: string, price: number) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [weightConfig, setWeightConfig] = useState<WeightConfig>(defaultWeightConfig)
@@ -47,15 +57,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.log('[AppContext] 批量新增订单:', newOrders)
   }
 
-  const findMergedGroupOrderIds = (allOrders: Order[], targetOrder: Order): string[] => {
-    if (!targetOrder.isMerged || !targetOrder.mergedOrderIds) {
-      return [targetOrder.id]
-    }
-    return targetOrder.mergedOrderIds
-  }
-
-  const cancelOrder = (orderId: string) => {
-    console.log('[AppContext] 请求取消订单:', orderId)
+  const cancelOrder = (orderId: string, cancelHourIndex?: number) => {
+    console.log('[AppContext] 请求取消订单:', orderId, '取消时段索引:', cancelHourIndex)
 
     setOrders(prev => {
       const targetOrder = prev.find(o => o.id === orderId)
@@ -64,67 +67,72 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return prev
       }
 
-      if (!targetOrder.isMerged || !targetOrder.mergedOrderIds || targetOrder.mergedOrderIds.length <= 1) {
-        console.log('[AppContext] 单条订单，直接取消')
+      const startMin = timeToMinutes(targetOrder.startTime)
+      const endMin = timeToMinutes(targetOrder.endTime)
+      const totalHours = (endMin - startMin) / 60
+
+      if (!targetOrder.isMerged || totalHours <= 1) {
+        console.log('[AppContext] 单小时订单，直接取消')
         return prev.map(o =>
           o.id === orderId ? { ...o, status: 'cancelled' as const } : o
         )
       }
 
-      console.log('[AppContext] 取消合并组中的订单，合并组IDs:', targetOrder.mergedOrderIds)
-
-      const groupIds = targetOrder.mergedOrderIds
-      const groupOrders = prev.filter(o => groupIds.includes(o.id) && o.status !== 'cancelled')
-      console.log('[AppContext] 合并组内有效订单数:', groupOrders.length)
-
-      if (groupOrders.length <= 1) {
-        return prev.map(o =>
-          o.id === orderId ? { ...o, status: 'cancelled' as const } : o
-        )
-      }
+      const hourToCancel = cancelHourIndex ?? Math.floor(totalHours / 2)
+      console.log('[AppContext] 取消合并订单中第', hourToCancel + 1, '个小时')
 
       const teacher = getTeacherById(targetOrder.teacherId)
-      const pricePerHour = teacher?.pricePerHour || Math.round(targetOrder.price / 2)
+      const pricePerHour = teacher?.pricePerHour || Math.round(targetOrder.price / totalHours)
 
-      const splitResult = splitMergedGroup(
-        groupOrders.map(o => ({
-          orderId: o.id,
-          teacherId: o.teacherId,
-          date: o.date,
-          startTime: o.startTime,
-          endTime: o.endTime,
-          pricePerHour
-        })),
-        orderId
-      )
+      const beforeHours = hourToCancel
+      const afterHours = totalHours - hourToCancel - 1
 
-      console.log('[AppContext] 拆分结果:', splitResult)
-
-      let newOrdersList = [...prev]
-
-      newOrdersList = newOrdersList.map(o =>
-        groupIds.includes(o.id) ? { ...o, status: 'cancelled' as const, isMerged: false, mergedOrderIds: undefined } : o
+      let newOrdersList = prev.map(o =>
+        o.id === orderId ? { ...o, status: 'cancelled' as const } : o
       )
 
       const now = Date.now()
-      const newOrderObjs: Order[] = splitResult.newOrders.map((segment, idx) => {
-        const newId = `o${now}_${idx}`
-        return {
-          id: newId,
-          teacherId: segment.teacherId,
+      const newOrderObjs: Order[] = []
+
+      if (beforeHours > 0) {
+        const segStart = startMin
+        const segEnd = startMin + beforeHours * 60
+        newOrderObjs.push({
+          id: `o${now}_before`,
+          teacherId: targetOrder.teacherId,
           teacherName: targetOrder.teacherName,
           teacherAvatar: targetOrder.teacherAvatar,
           subject: targetOrder.subject,
           grade: targetOrder.grade,
-          date: segment.date,
-          startTime: segment.startTime,
-          endTime: segment.endTime,
+          date: targetOrder.date,
+          startTime: minutesToTime(segStart),
+          endTime: minutesToTime(segEnd),
           status: 'confirmed' as const,
-          price: pricePerHour * segment.hourCount,
+          price: pricePerHour * beforeHours,
           address: targetOrder.address,
-          isMerged: segment.hourCount > 1
-        }
-      })
+          isMerged: beforeHours > 1
+        })
+      }
+
+      if (afterHours > 0) {
+        const segStart = startMin + (hourToCancel + 1) * 60
+        const segEnd = endMin
+        newOrderObjs.push({
+          id: `o${now}_after`,
+          teacherId: targetOrder.teacherId,
+          teacherName: targetOrder.teacherName,
+          teacherAvatar: targetOrder.teacherAvatar,
+          subject: targetOrder.subject,
+          grade: targetOrder.grade,
+          date: targetOrder.date,
+          startTime: minutesToTime(segStart),
+          endTime: minutesToTime(segEnd),
+          status: 'confirmed' as const,
+          price: pricePerHour * afterHours,
+          address: targetOrder.address,
+          isMerged: afterHours > 1
+        })
+      }
 
       console.log('[AppContext] 拆分后新增订单:', newOrderObjs)
       return [...newOrderObjs, ...newOrdersList]

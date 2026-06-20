@@ -157,3 +157,56 @@
   font-size: $font-size-md;
   color: $color-text-tertiary;
 }
+
+.cardActions {
+  display: flex;
+  gap: $spacing-sm;
+  margin-top: -$spacing-sm;
+  margin-bottom: $spacing-md;
+  padding: 0 $spacing-md;
+}
+
+.actionBtn {
+  flex: 1;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-bg-hover;
+  border-radius: $radius-sm;
+}
+
+.actionBtnText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  font-weight: $font-weight-medium;
+}
+
+.actionBtnPrimary {
+  flex: 1;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba($color-primary, 0.1);
+  border-radius: $radius-sm;
+}
+
+.actionBtnPrimaryText {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.legendHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-sm;
+}
+
+.legendGoDetail {
+  font-size: 20rpx;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
