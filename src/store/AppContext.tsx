@@ -139,12 +139,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const convertTrialToConfirmed = (orderId: string, price: number) => {
-    console.log('[AppContext] 试听课转正式课:', orderId, '价格:', price)
+  const convertTrialToConfirmed = (orderId: string, price: number, pricePerHour: number) => {
+    console.log('[AppContext] 试听课转正式课:', orderId, '总价:', price, '单价:', pricePerHour)
     setOrders(prev =>
-      prev.map(o =>
-        o.id === orderId ? { ...o, status: 'confirmed' as const, price } : o
-      )
+      prev.map(o => {
+        if (o.id !== orderId) return o
+        return {
+          ...o,
+          status: 'confirmed' as const,
+          price,
+          trialOriginInfo: {
+            originalTrialDate: o.date,
+            originalTrialStartTime: o.startTime,
+            originalTrialEndTime: o.endTime,
+            convertedAt: Date.now(),
+            convertedPricePerHour: pricePerHour
+          }
+        }
+      })
     )
   }
 

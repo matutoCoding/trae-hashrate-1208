@@ -35,7 +35,7 @@ function minutesToTime(minutes: number): string {
 const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, onClick }) => {
   const status = statusMap[order.status]
   const [showHourPicker, setShowHourPicker] = useState(false)
-  const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(null)
+  const [showDetail, setShowDetail] = useState(false)
 
   const startMin = timeToMinutes(order.startTime)
   const endMin = timeToMinutes(order.endTime)
@@ -47,13 +47,17 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
     hourOptions.push({ index: i, label: `${s} - ${e}` })
   }
 
+  const handleCardClick = () => {
+    setShowDetail(d => !d)
+    if (onClick) onClick()
+  }
+
   const handleCancelClick = (e: any) => {
     e.stopPropagation()
     if (!onCancel) return
 
     if (order.isMerged && totalHours > 1) {
       setShowHourPicker(true)
-      setSelectedHourIndex(null)
     } else {
       Taro.showModal({
         title: '确认取消',
@@ -69,20 +73,18 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
     }
   }
 
-  const handleConfirmCancelHour = () => {
-    if (selectedHourIndex === null) {
-      Taro.showToast({ title: '请选择要取消的时段', icon: 'none' })
-      return
-    }
+  const handlePickHourCancel = (index: number, e: any) => {
+    e.stopPropagation()
+    const selectedHour = hourOptions[index]
     Taro.showModal({
       title: '确认取消',
-      content: `确定要取消 ${hourOptions[selectedHourIndex].label} 这节课吗？剩余时段将自动拆分显示。`,
+      content: `确定要取消 ${selectedHour.label} 这节课吗？剩余时段将自动拆分显示。`,
       confirmColor: '#F53F3F',
       success: (res) => {
         if (res.confirm) {
-          onCancel!(order.id, selectedHourIndex)
+          onCancel!(order.id, index)
           setShowHourPicker(false)
-          Taro.showToast({ title: '已取消', icon: 'success' })
+          Taro.showToast({ title: '已取消该时段', icon: 'success' })
         }
       }
     })
@@ -105,9 +107,16 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
     }
   }
 
+  const formatTimestamp = (ts?: number) => {
+    if (!ts) return '—'
+    const d = new Date(ts)
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
   return (
-    <View className={styles.card} onClick={onClick}>
-      <View className={styles.header}>
+    <View className={styles.card}>
+      <View className={styles.header} onClick={handleCardClick}>
         <View className={styles.teacherInfo}>
           <Image className={styles.avatar} src={order.teacherAvatar} mode='aspectFill' />
           <View className={styles.info}>
@@ -138,7 +147,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
 
       <View className={styles.divider} />
 
-      <View className={styles.detail}>
+      <View className={styles.detail} onClick={handleCardClick}>
         <View className={styles.detailItem}>
           <Text className={styles.detailIcon}>📅</Text>
           <Text className={styles.detailText}>{order.date}</Text>
@@ -152,6 +161,55 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
           <Text className={styles.detailText}>{order.address}</Text>
         </View>
       </View>
+
+      {showDetail && (
+        <View className={styles.orderDetailPanel}>
+          <Text className={styles.orderDetailTitle}>订单详情</Text>
+          <View className={styles.orderDetailRow}>
+            <Text className={styles.orderDetailKey}>订单号</Text>
+            <Text className={styles.orderDetailValue}>{order.id}</Text>
+          </View>
+          <View className={styles.orderDetailRow}>
+            <Text className={styles.orderDetailKey}>创建时间</Text>
+            <Text className={styles.orderDetailValue}>{formatTimestamp(order.createdAt)}</Text>
+          </View>
+          {order.trialOriginInfo && (
+            <>
+              <View className={styles.convertBanner}>
+                <Text className={styles.convertBannerText}>🎯 由免费试听转化而来</Text>
+              </View>
+              <View className={styles.orderDetailRow}>
+                <Text className={styles.orderDetailKey}>原试听日期</Text>
+                <Text className={styles.orderDetailValue}>{order.trialOriginInfo.originalTrialDate}</Text>
+              </View>
+              <View className={styles.orderDetailRow}>
+                <Text className={styles.orderDetailKey}>原试听时间</Text>
+                <Text className={styles.orderDetailValue}>
+                  {order.trialOriginInfo.originalTrialStartTime} - {order.trialOriginInfo.originalTrialEndTime}
+                </Text>
+              </View>
+              <View className={styles.orderDetailRow}>
+                <Text className={styles.orderDetailKey}>转化时单价</Text>
+                <Text className={styles.orderDetailValue}>¥{order.trialOriginInfo.convertedPricePerHour}/小时</Text>
+              </View>
+              <View className={styles.orderDetailRow}>
+                <Text className={styles.orderDetailKey}>转化时间</Text>
+                <Text className={styles.orderDetailValue}>{formatTimestamp(order.trialOriginInfo.convertedAt)}</Text>
+              </View>
+            </>
+          )}
+          {totalHours > 1 && (
+            <View className={styles.orderDetailRow}>
+              <Text className={styles.orderDetailKey}>课时</Text>
+              <Text className={styles.orderDetailValue}>{totalHours} 小时（长课合并）</Text>
+            </View>
+          )}
+          <View className={styles.orderDetailRow}>
+            <Text className={styles.orderDetailKey}>授课老师</Text>
+            <Text className={styles.orderDetailValue}>{order.teacherName}</Text>
+          </View>
+        </View>
+      )}
 
       {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'trial') && (
         <View className={styles.footer}>
@@ -167,46 +225,46 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, 
             </Button>
           )}
           {order.status !== 'trial' && (
-            <Button className={classnames(styles.btn, styles.primaryBtn)}>
-              <Text className={styles.primaryText}>联系老师</Text>
+            <Button className={classnames(styles.btn, styles.primaryBtn)} onClick={handleCardClick}>
+              <Text className={styles.primaryText}>{showDetail ? '收起详情' : '查看详情'}</Text>
             </Button>
           )}
         </View>
       )}
 
       {showHourPicker && (
-        <View className={styles.modalOverlay}>
-          <View className={styles.modalContent}>
+        <View className={styles.modalOverlay} onClick={() => setShowHourPicker(false)}>
+          <View className={styles.modalContent} onClick={e => e.stopPropagation()}>
             <View className={styles.modalHeader}>
               <Text className={styles.modalTitle}>选择要取消的时段</Text>
               <Text className={styles.modalClose} onClick={() => setShowHourPicker(false)}>×</Text>
             </View>
             <View className={styles.modalBody}>
               <Text className={styles.modalDesc}>
-                这是{totalHours}节连订的长课（{order.startTime}-{order.endTime}），请选择要取消的单小时时段，剩余时段将自动拆分。
+                这是{totalHours}节连订的长课（{order.startTime}-{order.endTime}），点击下方时段即可单独取消，剩余时段将自动拆分并留在待上课程中。
               </Text>
               <View className={styles.hourOptions}>
-                {hourOptions.map(opt => (
-                  <View
-                    key={opt.index}
-                    className={classnames(
-                      styles.hourOption,
-                      selectedHourIndex === opt.index && styles.hourOptionActive
-                    )}
-                    onClick={() => setSelectedHourIndex(opt.index)}
-                  >
-                    <Text className={styles.hourOptionText}>{opt.label}</Text>
-                  </View>
-                ))}
+                {hourOptions.map((opt, idx) => {
+                  const isFirst = idx === 0
+                  const isLast = idx === hourOptions.length - 1
+                  const isMiddle = !isFirst && !isLast
+                  return (
+                    <View
+                      key={opt.index}
+                      className={styles.hourOption}
+                      onClick={(e) => handlePickHourCancel(idx, e)}
+                    >
+                      <View className={styles.hourOptionPos}>
+                        {isFirst && <Tag text='第一段' color='primary' size='small' />}
+                        {isLast && <Tag text='最后一段' color='success' size='small' />}
+                        {isMiddle && <Tag text='中间段' color='warning' size='small' />}
+                      </View>
+                      <Text className={styles.hourOptionText}>{opt.label}</Text>
+                      <Text className={styles.hourOptionAction}>点击取消</Text>
+                    </View>
+                  )
+                })}
               </View>
-            </View>
-            <View className={styles.modalFooter}>
-              <Button className={styles.modalCancelBtn} onClick={() => setShowHourPicker(false)}>
-                <Text>返回</Text>
-              </Button>
-              <Button className={styles.modalConfirmBtn} onClick={handleConfirmCancelHour}>
-                <Text>确认取消该时段</Text>
-              </Button>
             </View>
           </View>
         </View>

@@ -4,6 +4,7 @@ import Taro from '@tarojs/taro'
 import { useAppContext } from '@/store/AppContext'
 import OrderCard from '@/components/OrderCard'
 import Tag from '@/components/Tag'
+import WeekCalendar from '@/components/WeekCalendar'
 import { mergeSlots } from '@/utils/schedule'
 import styles from './index.module.scss'
 
@@ -12,6 +13,7 @@ type TabType = 'upcoming' | 'completed' | 'cancelled'
 const OrdersPage: React.FC = () => {
   const { orders, cancelOrder, convertTrialToConfirmed, getTeacherById } = useAppContext()
   const [activeTab, setActiveTab] = useState<TabType>('upcoming')
+  const [selectedDate, setSelectedDate] = useState<string>('')
 
   const filteredOrders = useMemo(() => {
     switch (activeTab) {
@@ -40,9 +42,9 @@ const OrdersPage: React.FC = () => {
     return merged
   }, [orders])
 
-  const handleCancel = (orderId: string) => {
-    cancelOrder(orderId)
-    console.log('[Orders] 取消订单，时段已自动拆分释放:', orderId)
+  const handleCancel = (orderId: string, cancelHourIndex?: number) => {
+    cancelOrder(orderId, cancelHourIndex)
+    console.log('[Orders] 取消订单，时段已自动拆分释放:', orderId, cancelHourIndex)
   }
 
   const handleConvertTrial = (orderId: string) => {
@@ -52,9 +54,10 @@ const OrdersPage: React.FC = () => {
     const startH = parseInt(order.startTime.split(':')[0])
     const endH = parseInt(order.endTime.split(':')[0])
     const hours = endH - startH
-    const price = (teacher?.pricePerHour || 150) * hours
-    convertTrialToConfirmed(orderId, price)
-    console.log('[Orders] 试听课转正式课:', orderId, '价格:', price)
+    const pricePerHour = teacher?.pricePerHour || 150
+    const price = pricePerHour * hours
+    convertTrialToConfirmed(orderId, price, pricePerHour)
+    console.log('[Orders] 试听课转正式课:', orderId, '单价:', pricePerHour, '总价:', price)
   }
 
   const handleFindTeacher = () => {
@@ -82,11 +85,19 @@ const OrdersPage: React.FC = () => {
       </View>
 
       <View className={styles.content}>
+        {activeTab === 'upcoming' && (
+          <WeekCalendar
+            orders={orders}
+            selectedDate={selectedDate || undefined}
+            onDateSelect={setSelectedDate}
+          />
+        )}
+
         {activeTab === 'upcoming' && upcomingSchedule.some(s => s.orderIds.length > 1) && (
           <View className={styles.mergeTip}>
             <Text className={styles.mergeTipIcon}>💡</Text>
             <Text className={styles.mergeTipText}>
-              同一老师的相邻时段已自动合并为整段占用。取消其中任一时段后，剩余时段将自动拆分并继续显示。
+              同一老师的相邻时段已自动合并为整段占用。点击「取消课程」可选择取消某一节，剩余时段自动拆分显示。
             </Text>
           </View>
         )}

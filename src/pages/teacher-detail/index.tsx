@@ -20,6 +20,7 @@ const TeacherDetailPage: React.FC = () => {
   const [showTrialPicker, setShowTrialPicker] = useState(false)
   const [trialSelectedSlot, setTrialSelectedSlot] = useState<string>('')
   const [bookSelectedSlots, setBookSelectedSlots] = useState<string[]>([])
+  const [showPreview, setShowPreview] = useState(false)
 
   const teacher = useMemo(() => {
     const t = getTeacherById(teacherId)
@@ -53,18 +54,31 @@ const TeacherDetailPage: React.FC = () => {
     return result
   }, [orders, teacher.id])
 
+  const previewGroups = useMemo(() => {
+    if (bookSelectedSlots.length === 0) return []
+    const selectedSlotObjs = slots.filter(s => bookSelectedSlots.includes(s.id))
+    return groupSelectedSlotsByContinuous(selectedSlotObjs)
+  }, [bookSelectedSlots, slots])
+
+  const totalPrice = useMemo(() => {
+    return previewGroups.reduce((sum, g) => sum + teacher.pricePerHour * g.hourCount, 0)
+  }, [previewGroups, teacher.pricePerHour])
+
+  const totalHours = useMemo(() => {
+    return previewGroups.reduce((sum, g) => sum + g.hourCount, 0)
+  }, [previewGroups])
+
   const handleBook = () => {
     if (bookSelectedSlots.length === 0) {
       Taro.showToast({ title: '请选择时段', icon: 'none' })
       return
     }
+    setShowPreview(true)
+  }
 
-    const selectedSlotObjs = slots.filter(s => bookSelectedSlots.includes(s.id))
-    const groups = groupSelectedSlotsByContinuous(selectedSlotObjs)
-    console.log('[TeacherDetail] 分组时段:', groups)
-
+  const handleConfirmBook = () => {
     const now = Date.now()
-    const newOrders: Order[] = groups.map((group, gIdx) => {
+    const newOrders: Order[] = previewGroups.map((group, gIdx) => {
       const hourCount = group.hourCount
       const orderId = `o${now}_${gIdx}`
 
@@ -87,7 +101,8 @@ const TeacherDetailPage: React.FC = () => {
         price: teacher.pricePerHour * hourCount,
         address: currentRequirement?.location?.address || '北京市朝阳区望京',
         isMerged: hourCount > 1,
-        mergedOrderIds: hourCount > 1 ? segmentIds : undefined
+        mergedOrderIds: hourCount > 1 ? segmentIds : undefined,
+        createdAt: Date.now()
       }
     })
 
@@ -100,6 +115,7 @@ const TeacherDetailPage: React.FC = () => {
     console.log('[TeacherDetail] 预约成功，订单:', newOrders)
     Taro.showToast({ title: '预约成功', icon: 'success' })
     setBookSelectedSlots([])
+    setShowPreview(false)
     setTimeout(() => {
       Taro.switchTab({ url: '/pages/orders/index' })
     }, 1000)
@@ -143,7 +159,8 @@ const TeacherDetailPage: React.FC = () => {
       status: 'trial',
       price: 0,
       address: currentRequirement?.location?.address || '北京市朝阳区望京',
-      isMerged: false
+      isMerged: false,
+      createdAt: Date.now()
     }
 
     addOrder(trialOrder)
@@ -238,7 +255,7 @@ const TeacherDetailPage: React.FC = () => {
           {bookSelectedSlots.length > 0 && (
             <View className={styles.slotSummary}>
               <Text className={styles.summaryText}>
-                已选 {bookSelectedSlots.length} 个时段 · 共生成 {groupSelectedSlotsByContinuous(slots.filter(s => bookSelectedSlots.includes(s.id))).length} 条课程 · 预计 ¥{teacher.pricePerHour * bookSelectedSlots.length}
+                已选 {bookSelectedSlots.length} 个时段 · 共 {previewGroups.length} 条课程 · {totalHours} 小时 · 预计 ¥{totalPrice}
               </Text>
             </View>
           )}
@@ -250,9 +267,72 @@ const TeacherDetailPage: React.FC = () => {
           <Text className={styles.trialText}>免费试听</Text>
         </Button>
         <Button className={styles.bookBtn} onClick={handleBook}>
-          <Text className={styles.bookText}>立即预约</Text>
+          <Text className={styles.bookText}>
+            {bookSelectedSlots.length > 0 ? `确认预约 ¥${totalPrice}` : '立即预约'}
+          </Text>
         </Button>
       </View>
+
+      {showPreview && previewGroups.length > 0 && (
+        <View className={styles.modalOverlay}>
+          <View className={styles.modalContent}>
+            <View className={styles.modalHeader}>
+              <Text className={styles.modalTitle}>确认预约信息</Text>
+              <Text className={styles.modalClose} onClick={() => setShowPreview(false)}>×</Text>
+            </View>
+            <View className={styles.modalBody}>
+              <View className={styles.previewTeacher}>
+                <Image className={styles.previewAvatar} src={teacher.avatar} mode='aspectFill' />
+                <View className={styles.previewTeacherInfo}>
+                  <Text className={styles.previewTeacherName}>{teacher.name}</Text>
+                  <Text className={styles.previewTeacherSubject}>
+                    {teacher.subjects.join('、')} · {currentRequirement?.grade || '高一'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text className={styles.previewSectionTitle}>将生成以下 {previewGroups.length} 条课程</Text>
+
+              <View className={styles.previewList}>
+                {previewGroups.map((g, i) => (
+                  <View key={i} className={styles.previewItem}>
+                    <View className={styles.previewItemIndex}>
+                      <Text className={styles.previewItemIndexText}>{i + 1}</Text>
+                    </View>
+                    <View className={styles.previewItemContent}>
+                      <Text className={styles.previewItemTime}>
+                        {g.date}  {g.startTime} - {g.endTime}
+                      </Text>
+                      <View style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        {g.hourCount > 1 && (
+                          <Tag text={`长课${g.hourCount}节`} color='cyan' size='small' />
+                        )}
+                        <Tag text={`¥${teacher.pricePerHour * g.hourCount}`} color='warning' size='small' />
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View className={styles.previewTotal}>
+                <Text className={styles.previewTotalLabel}>合计</Text>
+                <View>
+                  <Text className={styles.previewTotalPrice}>¥{totalPrice}</Text>
+                  <Text className={styles.previewTotalMeta}>  ·  {totalHours}小时 · {previewGroups.length}节课</Text>
+                </View>
+              </View>
+            </View>
+            <View className={styles.modalFooter}>
+              <Button className={styles.modalCancelBtn} onClick={() => setShowPreview(false)}>
+                <Text>返回修改</Text>
+              </Button>
+              <Button className={styles.modalConfirmBtn} onClick={handleConfirmBook}>
+                <Text>确认预约</Text>
+              </Button>
+            </View>
+          </View>
+        </View>
+      )}
 
       {showTrialPicker && (
         <View className={styles.modalOverlay}>

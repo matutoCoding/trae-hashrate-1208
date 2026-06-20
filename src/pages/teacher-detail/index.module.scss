@@ -303,3 +303,122 @@
   color: $color-primary;
   font-weight: $font-weight-medium;
 }
+
+.previewTeacher {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-md;
+  background: $color-bg-hover;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-lg;
+}
+
+.previewAvatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: $radius-md;
+  background: $color-bg-card;
+  flex-shrink: 0;
+}
+
+.previewTeacherInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.previewTeacherName {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: block;
+}
+
+.previewTeacherSubject {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.previewSectionTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-sm;
+  display: block;
+}
+
+.previewList {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-lg;
+}
+
+.previewItem {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+  padding: $spacing-md;
+  background: $color-bg-card;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+}
+
+.previewItemIndex {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: $radius-round;
+  background: $color-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.previewItemIndexText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  line-height: 1;
+}
+
+.previewItemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.previewItemTime {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: block;
+}
+
+.previewTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-lg;
+  background: rgba($color-primary, 0.06);
+  border-radius: $radius-md;
+  border: 2rpx dashed $color-primary;
+}
+
+.previewTotalLabel {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.previewTotalPrice {
+  font-size: 48rpx;
+  font-weight: $font-weight-bold;
+  color: $color-danger;
+}
+
+.previewTotalMeta {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}

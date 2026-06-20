@@ -29,6 +29,14 @@ export interface TimeSlot {
   available: boolean
 }
 
+export interface TrialOriginInfo {
+  originalTrialDate: string
+  originalTrialStartTime: string
+  originalTrialEndTime: string
+  convertedAt: number
+  convertedPricePerHour: number
+}
+
 export interface Order {
   id: string
   teacherId: string
@@ -44,6 +52,8 @@ export interface Order {
   address: string
   isMerged?: boolean
   mergedOrderIds?: string[]
+  trialOriginInfo?: TrialOriginInfo
+  createdAt?: number
 }
 
 export interface Subject {
