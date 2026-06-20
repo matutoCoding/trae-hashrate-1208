@@ -1,7 +1,8 @@
-import { Order, TimeSlot } from '@/types'
+import { TimeSlot } from '@/types'
 
 export interface OccupiedSlot {
   orderId: string
+  teacherId: string
   date: string
   startTime: string
   endTime: string
@@ -19,10 +20,11 @@ function minutesToTime(minutes: number): string {
 }
 
 export function canMergeSlots(
-  slot1: { startTime: string; endTime: string; date: string },
-  slot2: { startTime: string; endTime: string; date: string }
+  slot1: { startTime: string; endTime: string; date: string; teacherId: string },
+  slot2: { startTime: string; endTime: string; date: string; teacherId: string }
 ): boolean {
   if (slot1.date !== slot2.date) return false
+  if (slot1.teacherId !== slot2.teacherId) return false
   const end1 = timeToMinutes(slot1.endTime)
   const start2 = timeToMinutes(slot2.startTime)
   const end2 = timeToMinutes(slot2.endTime)
@@ -31,18 +33,20 @@ export function canMergeSlots(
 }
 
 export function mergeSlots(
-  slots: Array<{ orderId: string; date: string; startTime: string; endTime: string }>
-): Array<{ orderIds: string[]; date: string; startTime: string; endTime: string }> {
+  slots: Array<{ orderId: string; teacherId: string; date: string; startTime: string; endTime: string }>
+): Array<{ orderIds: string[]; teacherId: string; date: string; startTime: string; endTime: string }> {
   if (slots.length === 0) return []
 
   const sorted = [...slots].sort((a, b) => {
+    if (a.teacherId !== b.teacherId) return a.teacherId.localeCompare(b.teacherId)
     if (a.date !== b.date) return a.date.localeCompare(b.date)
     return timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
   })
 
-  const merged: Array<{ orderIds: string[]; date: string; startTime: string; endTime: string }> = []
+  const merged: Array<{ orderIds: string[]; teacherId: string; date: string; startTime: string; endTime: string }> = []
   let current = {
     orderIds: [sorted[0].orderId],
+    teacherId: sorted[0].teacherId,
     date: sorted[0].date,
     startTime: sorted[0].startTime,
     endTime: sorted[0].endTime
@@ -61,6 +65,7 @@ export function mergeSlots(
       merged.push(current)
       current = {
         orderIds: [sorted[i].orderId],
+        teacherId: sorted[i].teacherId,
         date: sorted[i].date,
         startTime: sorted[i].startTime,
         endTime: sorted[i].endTime
@@ -71,39 +76,56 @@ export function mergeSlots(
   return merged
 }
 
-export function splitOccupiedSlot(
-  occupiedSlots: OccupiedSlot[],
-  cancelSlot: OccupiedSlot
-): OccupiedSlot[] {
-  const result: OccupiedSlot[] = []
-  const cancelStart = timeToMinutes(cancelSlot.startTime)
-  const cancelEnd = timeToMinutes(cancelSlot.endTime)
+export interface OrderGroupSplitResult {
+  removedOrderId: string
+  newOrders: Array<{ teacherId: string; date: string; startTime: string; endTime: string; hourCount: number }>
+}
 
-  for (const slot of occupiedSlots) {
-    if (slot.date !== cancelSlot.date || slot.orderId === cancelSlot.orderId) {
-      continue
-    }
-    const slotStart = timeToMinutes(slot.startTime)
-    const slotEnd = timeToMinutes(slot.endTime)
+export function splitMergedGroup(
+  groupOrders: Array<{ orderId: string; teacherId: string; date: string; startTime: string; endTime: string; pricePerHour: number }>,
+  cancelOrderId: string
+): OrderGroupSplitResult {
+  const sorted = [...groupOrders].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 
-    if (slotEnd <= cancelStart || slotStart >= cancelEnd) {
-      result.push(slot)
-    } else {
-      if (slotStart < cancelStart) {
-        result.push({
-          ...slot,
-          endTime: minutesToTime(cancelStart)
-        })
-      }
-      if (slotEnd > cancelEnd) {
-        result.push({
-          ...slot,
-          startTime: minutesToTime(cancelEnd)
-        })
-      }
-    }
+  const cancelIndex = sorted.findIndex(o => o.orderId === cancelOrderId)
+  if (cancelIndex === -1) {
+    return { removedOrderId: cancelOrderId, newOrders: [] }
   }
-  return result
+
+  const before = sorted.slice(0, cancelIndex)
+  const after = sorted.slice(cancelIndex + 1)
+
+  const newOrders: OrderGroupSplitResult['newOrders'] = []
+
+  if (before.length > 0) {
+    const first = before[0]
+    const last = before[before.length - 1]
+    const start = timeToMinutes(first.startTime)
+    const end = timeToMinutes(last.endTime)
+    newOrders.push({
+      teacherId: first.teacherId,
+      date: first.date,
+      startTime: minutesToTime(start),
+      endTime: minutesToTime(end),
+      hourCount: (end - start) / 60
+    })
+  }
+
+  if (after.length > 0) {
+    const first = after[0]
+    const last = after[after.length - 1]
+    const start = timeToMinutes(first.startTime)
+    const end = timeToMinutes(last.endTime)
+    newOrders.push({
+      teacherId: first.teacherId,
+      date: first.date,
+      startTime: minutesToTime(start),
+      endTime: minutesToTime(end),
+      hourCount: (end - start) / 60
+    })
+  }
+
+  return { removedOrderId: cancelOrderId, newOrders }
 }
 
 export function generateAvailableSlots(
@@ -134,4 +156,51 @@ export function generateAvailableSlots(
     })
   }
   return slots
+}
+
+export function groupSelectedSlotsByContinuous(
+  slots: TimeSlot[]
+): Array<{ date: string; startTime: string; endTime: string; hourCount: number; slotIds: string[] }> {
+  if (slots.length === 0) return []
+
+  const byDate: Record<string, TimeSlot[]> = {}
+  slots.forEach(s => {
+    if (!byDate[s.date]) byDate[s.date] = []
+    byDate[s.date].push(s)
+  })
+
+  const result: Array<{ date: string; startTime: string; endTime: string; hourCount: number; slotIds: string[] }> = []
+
+  Object.keys(byDate).forEach(date => {
+    const daySlots = byDate[date].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+
+    let currentGroup: TimeSlot[] = [daySlots[0]]
+
+    for (let i = 1; i < daySlots.length; i++) {
+      const prevEnd = timeToMinutes(currentGroup[currentGroup.length - 1].endTime)
+      const currStart = timeToMinutes(daySlots[i].startTime)
+      if (prevEnd === currStart) {
+        currentGroup.push(daySlots[i])
+      } else {
+        result.push({
+          date,
+          startTime: currentGroup[0].startTime,
+          endTime: currentGroup[currentGroup.length - 1].endTime,
+          hourCount: currentGroup.length,
+          slotIds: currentGroup.map(s => s.id)
+        })
+        currentGroup = [daySlots[i]]
+      }
+    }
+
+    result.push({
+      date,
+      startTime: currentGroup[0].startTime,
+      endTime: currentGroup[currentGroup.length - 1].endTime,
+      hourCount: currentGroup.length,
+      slotIds: currentGroup.map(s => s.id)
+    })
+  })
+
+  return result
 }

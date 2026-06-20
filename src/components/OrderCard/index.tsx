@@ -9,6 +9,7 @@ import styles from './index.module.scss'
 interface OrderCardProps {
   order: Order
   onCancel?: (orderId: string) => void
+  onConvertTrial?: (orderId: string) => void
   onClick?: () => void
 }
 
@@ -20,7 +21,7 @@ const statusMap: Record<Order['status'], { label: string; color: 'primary' | 'su
   trial: { label: '试听课', color: 'info' }
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onClick }) => {
+const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onConvertTrial, onClick }) => {
   const status = statusMap[order.status]
 
   const handleCancel = (e: any) => {
@@ -28,12 +29,31 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onClick }) => {
     if (onCancel) {
       Taro.showModal({
         title: '确认取消',
-        content: '确定要取消这节课程吗？取消后时段将自动拆分释放。',
+        content: order.isMerged
+          ? '这是连时段课程，取消当前时段后剩余时段将自动拆分显示。是否继续？'
+          : '确定要取消这节课程吗？取消后时段将自动释放。',
         confirmColor: '#F53F3F',
         success: (res) => {
           if (res.confirm) {
             onCancel(order.id)
             Taro.showToast({ title: '已取消', icon: 'success' })
+          }
+        }
+      })
+    }
+  }
+
+  const handleConvertTrial = (e: any) => {
+    e.stopPropagation()
+    if (onConvertTrial) {
+      Taro.showModal({
+        title: '转正式课',
+        content: '试听满意，将此试听课转为正式课程并开始计费？',
+        confirmText: '确认转化',
+        success: (res) => {
+          if (res.confirm) {
+            onConvertTrial(order.id)
+            Taro.showToast({ title: '已转为正式课', icon: 'success' })
           }
         }
       })
@@ -97,7 +117,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onClick }) => {
             <Text className={styles.cancelText}>取消课程</Text>
           </Button>
           {order.status === 'trial' && (
-            <Button className={classnames(styles.btn, styles.primaryBtn)}>
+            <Button className={classnames(styles.btn, styles.primaryBtn)} onClick={handleConvertTrial}>
               <Text className={styles.primaryText}>转正式课</Text>
             </Button>
           )}

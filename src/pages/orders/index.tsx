@@ -10,7 +10,7 @@ import styles from './index.module.scss'
 type TabType = 'upcoming' | 'completed' | 'cancelled'
 
 const OrdersPage: React.FC = () => {
-  const { orders, cancelOrder } = useAppContext()
+  const { orders, cancelOrder, convertTrialToConfirmed, getTeacherById } = useAppContext()
   const [activeTab, setActiveTab] = useState<TabType>('upcoming')
 
   const filteredOrders = useMemo(() => {
@@ -31,6 +31,7 @@ const OrdersPage: React.FC = () => {
     const merged = mergeSlots(
       upcoming.map(o => ({
         orderId: o.id,
+        teacherId: o.teacherId,
         date: o.date,
         startTime: o.startTime,
         endTime: o.endTime
@@ -42,6 +43,18 @@ const OrdersPage: React.FC = () => {
   const handleCancel = (orderId: string) => {
     cancelOrder(orderId)
     console.log('[Orders] 取消订单，时段已自动拆分释放:', orderId)
+  }
+
+  const handleConvertTrial = (orderId: string) => {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+    const teacher = getTeacherById(order.teacherId)
+    const startH = parseInt(order.startTime.split(':')[0])
+    const endH = parseInt(order.endTime.split(':')[0])
+    const hours = endH - startH
+    const price = (teacher?.pricePerHour || 150) * hours
+    convertTrialToConfirmed(orderId, price)
+    console.log('[Orders] 试听课转正式课:', orderId, '价格:', price)
   }
 
   const handleFindTeacher = () => {
@@ -69,11 +82,11 @@ const OrdersPage: React.FC = () => {
       </View>
 
       <View className={styles.content}>
-        {activeTab === 'upcoming' && upcomingSchedule.length > 1 && (
+        {activeTab === 'upcoming' && upcomingSchedule.some(s => s.orderIds.length > 1) && (
           <View className={styles.mergeTip}>
             <Text className={styles.mergeTipIcon}>💡</Text>
             <Text className={styles.mergeTipText}>
-              您有连续时段已自动合并为整段占用，老师会安排连贯教学。取消任一时段将自动拆分并释放其余时段。
+              同一老师的相邻时段已自动合并为整段占用。取消其中任一时段后，剩余时段将自动拆分并继续显示。
             </Text>
           </View>
         )}
@@ -84,6 +97,8 @@ const OrdersPage: React.FC = () => {
             {upcomingSchedule.map((slot, i) => {
               const relatedOrders = orders.filter(o => slot.orderIds.includes(o.id))
               const order = relatedOrders[0]
+              const allTeachers = new Set(relatedOrders.map(o => o.teacherName))
+              const teacherName = allTeachers.size === 1 ? Array.from(allTeachers)[0] : `${relatedOrders.length}位老师`
               return (
                 <View key={i} className={styles.scheduleRow}>
                   <View className={styles.scheduleTime}>
@@ -94,11 +109,11 @@ const OrdersPage: React.FC = () => {
                   </View>
                   <View className={styles.scheduleInfo}>
                     <Text className={styles.scheduleSubject}>
-                      {relatedOrders.map(o => o.subject).join('、')}
+                      {relatedOrders.map(o => o.subject).filter((v, idx, arr) => arr.indexOf(v) === idx).join('、')}
                     </Text>
                     <Text className={styles.scheduleTeacher}>
-                      {order?.teacherName}
-                      {slot.orderIds.length > 1 && ` · 连订${slot.orderIds.length}段`}
+                      {teacherName}
+                      {slot.orderIds.length > 1 && ` · ${slot.orderIds.length}节连订`}
                     </Text>
                   </View>
                   <View className={styles.scheduleStatus}>
@@ -139,6 +154,7 @@ const OrdersPage: React.FC = () => {
               key={order.id}
               order={order}
               onCancel={handleCancel}
+              onConvertTrial={handleConvertTrial}
             />
           ))
         )}

@@ -1,81 +1,208 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { View, Text, Image, Button } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useRouter } from '@tarojs/taro'
 import { useAppContext } from '@/store/AppContext'
-import { teachersData } from '@/data'
 import { calculateTeacherScore } from '@/utils/scoring'
 import { formatDistance } from '@/utils/distance'
 import ScoreBar from '@/components/ScoreBar'
 import Tag from '@/components/Tag'
-import { TimeSlot as TimeSlotType } from '@/types'
+import { TimeSlot as TimeSlotType, Order } from '@/types'
 import TimeSlotPicker from '@/components/TimeSlot'
+import { groupSelectedSlotsByContinuous, generateAvailableSlots, OccupiedSlot } from '@/utils/schedule'
 import styles from './index.module.scss'
 
 const TeacherDetailPage: React.FC = () => {
-  const { teachers, currentRequirement, weightConfig, addOrder } = useAppContext()
+  const router = useRouter()
+  const teacherId = router.params?.id || 't001'
 
-  const teacher = useMemo(() => teachers[0] || teachersData[0], [teachers])
+  const { getTeacherById, teachers, orders, currentRequirement, weightConfig, addOrders } = useAppContext()
+
+  const [showTrialPicker, setShowTrialPicker] = useState(false)
+  const [trialSelectedSlots, setTrialSelectedSlots] = useState<string[]>([])
+  const [bookSelectedSlots, setBookSelectedSlots] = useState<string[]>([])
+
+  const teacher = useMemo(() => {
+    const t = getTeacherById(teacherId)
+    return t || teachers[0]
+  }, [teacherId, getTeacherById, teachers])
 
   const score = useMemo(() => {
-    if (!currentRequirement) return null
+    if (!currentRequirement || !teacher) return null
     return calculateTeacherScore(teacher, currentRequirement, weightConfig)
   }, [teacher, currentRequirement, weightConfig])
-
-  const [selectedSlots, setSelectedSlots] = React.useState<string[]>([])
 
   const slots: TimeSlotType[] = useMemo(() => {
     const dates = ['2026-06-22', '2026-06-23', '2026-06-24']
     const result: TimeSlotType[] = []
+
+    const teacherOrders = orders.filter(
+      o => o.teacherId === teacher.id && o.status !== 'cancelled'
+    )
+    const occupied: OccupiedSlot[] = teacherOrders.map(o => ({
+      orderId: o.id,
+      teacherId: o.teacherId,
+      date: o.date,
+      startTime: o.startTime,
+      endTime: o.endTime
+    }))
+
     dates.forEach(date => {
-      for (let h = 8; h < 21; h++) {
-        const startTime = `${h.toString().padStart(2, '0')}:00`
-        const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-        const unavailable = (h >= 10 && h < 12 && date === '2026-06-22')
-        result.push({
-          id: `${date}-${startTime}`,
-          date,
-          startTime,
-          endTime,
-          available: !unavailable
-        })
-      }
+      const daySlots = generateAvailableSlots(date, occupied)
+      result.push(...daySlots)
     })
     return result
-  }, [])
+  }, [orders, teacher.id])
 
   const handleBook = () => {
-    if (selectedSlots.length === 0) {
+    if (bookSelectedSlots.length === 0) {
       Taro.showToast({ title: '请选择时段', icon: 'none' })
       return
     }
-    const firstSlot = slots.find(s => s.id === selectedSlots[0])
-    const lastSlot = slots.find(s => s.id === selectedSlots[selectedSlots.length - 1])
-    if (firstSlot && lastSlot) {
-      addOrder({
-        id: `o${Date.now()}`,
+
+    const selectedSlotObjs = slots.filter(s => bookSelectedSlots.includes(s.id))
+    const groups = groupSelectedSlotsByContinuous(selectedSlotObjs)
+    console.log('[TeacherDetail] 分组时段:', groups)
+
+    const now = Date.now()
+    const newOrders: Order[] = groups.map((group, idx) => {
+      const allSlotIds = group.slotIds
+      const orderId = `o${now}_${idx}`
+      const hourCount = group.hourCount
+      return {
+        id: orderId,
         teacherId: teacher.id,
         teacherName: teacher.name,
         teacherAvatar: teacher.avatar,
         subject: teacher.subjects[0],
-        grade: '高一',
-        date: firstSlot.date,
-        startTime: firstSlot.startTime,
-        endTime: lastSlot.endTime,
-        status: 'confirmed',
-        price: teacher.pricePerHour * selectedSlots.length,
-        address: '北京市朝阳区望京',
-        isMerged: selectedSlots.length > 1
+        grade: currentRequirement?.grade || '高一',
+        date: group.date,
+        startTime: group.startTime,
+        endTime: group.endTime,
+        status: 'confirmed' as const,
+        price: teacher.pricePerHour * hourCount,
+        address: currentRequirement?.location?.address || '北京市朝阳区望京',
+        isMerged: hourCount > 1,
+        mergedOrderIds: hourCount > 1 ? [`${orderId}_base`] : undefined
+      }
+    })
+
+    if (newOrders.length === 1 && newOrders[0].isMerged) {
+      const o = newOrders[0]
+      const hourCount = groups[0].hourCount
+      const segOrders: Order[] = []
+      for (let i = 0; i < hourCount; i++) {
+        const segId = `seg${now}_0_${i}`
+        const startH = parseInt(o.startTime.split(':')[0]) + i
+        const endH = startH + 1
+        segOrders.push({
+          id: segId,
+          teacherId: o.teacherId,
+          teacherName: o.teacherName,
+          teacherAvatar: o.teacherAvatar,
+          subject: o.subject,
+          grade: o.grade,
+          date: o.date,
+          startTime: `${startH.toString().padStart(2, '0')}:00`,
+          endTime: `${endH.toString().padStart(2, '0')}:00`,
+          status: 'confirmed' as const,
+          price: teacher.pricePerHour,
+          address: o.address,
+          isMerged: true,
+          mergedOrderIds: Array.from({ length: hourCount }, (_, j) => `seg${now}_0_${j}`)
+        })
+      }
+      addOrders(segOrders)
+    } else if (newOrders.length > 1) {
+      const allSegOrders: Order[] = []
+      groups.forEach((group, gIdx) => {
+        const hourCount = group.hourCount
+        const groupSegIds: string[] = []
+        for (let i = 0; i < hourCount; i++) {
+          const segId = `seg${now}_${gIdx}_${i}`
+          groupSegIds.push(segId)
+        }
+        for (let i = 0; i < hourCount; i++) {
+          const startH = parseInt(group.startTime.split(':')[0]) + i
+          const endH = startH + 1
+          allSegOrders.push({
+            id: groupSegIds[i],
+            teacherId: teacher.id,
+            teacherName: teacher.name,
+            teacherAvatar: teacher.avatar,
+            subject: teacher.subjects[0],
+            grade: currentRequirement?.grade || '高一',
+            date: group.date,
+            startTime: `${startH.toString().padStart(2, '0')}:00`,
+            endTime: `${endH.toString().padStart(2, '0')}:00`,
+            status: 'confirmed' as const,
+            price: teacher.pricePerHour,
+            address: currentRequirement?.location?.address || '北京市朝阳区望京',
+            isMerged: true,
+            mergedOrderIds: groupSegIds
+          })
+        }
       })
-      console.log('[TeacherDetail] 预约成功，时段:', selectedSlots)
-      Taro.showToast({ title: '预约成功', icon: 'success' })
-      setTimeout(() => {
-        Taro.switchTab({ url: '/pages/orders/index' })
-      }, 1000)
+      addOrders(allSegOrders)
+    } else {
+      addOrders(newOrders)
     }
+
+    console.log('[TeacherDetail] 预约成功，时段:', bookSelectedSlots)
+    Taro.showToast({ title: '预约成功', icon: 'success' })
+    setBookSelectedSlots([])
+    setTimeout(() => {
+      Taro.switchTab({ url: '/pages/orders/index' })
+    }, 1000)
   }
 
-  const handleTrial = () => {
+  const handleTrialClick = () => {
+    setShowTrialPicker(true)
+    setTrialSelectedSlots([])
+  }
+
+  const handleConfirmTrial = () => {
+    if (trialSelectedSlots.length === 0) {
+      Taro.showToast({ title: '请选择试听时段', icon: 'none' })
+      return
+    }
+
+    const selectedSlotObjs = slots.filter(s => trialSelectedSlots.includes(s.id))
+    const firstSlot = selectedSlotObjs[0]
+    const hourCount = selectedSlotObjs.length
+    const lastSlot = selectedSlotObjs[hourCount - 1]
+
+    const trialOrder: Order = {
+      id: `trial${Date.now()}`,
+      teacherId: teacher.id,
+      teacherName: teacher.name,
+      teacherAvatar: teacher.avatar,
+      subject: teacher.subjects[0],
+      grade: currentRequirement?.grade || '高一',
+      date: firstSlot.date,
+      startTime: firstSlot.startTime,
+      endTime: lastSlot.endTime,
+      status: 'trial',
+      price: 0,
+      address: currentRequirement?.location?.address || '北京市朝阳区望京',
+      isMerged: hourCount > 1
+    }
+
+    addOrders([trialOrder])
+    console.log('[TeacherDetail] 试听申请已提交:', trialOrder)
     Taro.showToast({ title: '试听申请已提交', icon: 'success' })
+    setShowTrialPicker(false)
+    setTrialSelectedSlots([])
+    setTimeout(() => {
+      Taro.switchTab({ url: '/pages/orders/index' })
+    }, 1000)
+  }
+
+  if (!teacher) {
+    return (
+      <View className={styles.page}>
+        <Text>未找到老师信息</Text>
+      </View>
+    )
   }
 
   return (
@@ -143,23 +270,56 @@ const TeacherDetailPage: React.FC = () => {
         </View>
 
         <View className={styles.sectionCard}>
-          <Text className={styles.sectionTitle}>选择时段（连续时段自动合并）</Text>
+          <Text className={styles.sectionTitle}>选择时段（连续时段合并成一节课，不连续分别生成订单）</Text>
           <TimeSlotPicker
             slots={slots}
-            selectedIds={selectedSlots}
-            onChange={setSelectedSlots}
+            selectedIds={bookSelectedSlots}
+            onChange={setBookSelectedSlots}
           />
+          {bookSelectedSlots.length > 0 && (
+            <View className={styles.slotSummary}>
+              <Text className={styles.summaryText}>
+                已选 {bookSelectedSlots.length} 个时段 · 连续将合并 · 预计 ¥{teacher.pricePerHour * bookSelectedSlots.length}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
       <View className={styles.footerBar}>
-        <Button className={styles.trialBtn} onClick={handleTrial}>
+        <Button className={styles.trialBtn} onClick={handleTrialClick}>
           <Text className={styles.trialText}>免费试听</Text>
         </Button>
         <Button className={styles.bookBtn} onClick={handleBook}>
           <Text className={styles.bookText}>立即预约</Text>
         </Button>
       </View>
+
+      {showTrialPicker && (
+        <View className={styles.modalOverlay}>
+          <View className={styles.modalContent}>
+            <View className={styles.modalHeader}>
+              <Text className={styles.modalTitle}>选择试听时段（1小时）</Text>
+              <Text className={styles.modalClose} onClick={() => setShowTrialPicker(false)}>×</Text>
+            </View>
+            <View className={styles.modalBody}>
+              <TimeSlotPicker
+                slots={slots}
+                selectedIds={trialSelectedSlots}
+                onChange={setTrialSelectedSlots}
+              />
+            </View>
+            <View className={styles.modalFooter}>
+              <Button className={styles.modalCancelBtn} onClick={() => setShowTrialPicker(false)}>
+                <Text>取消</Text>
+              </Button>
+              <Button className={styles.modalConfirmBtn} onClick={handleConfirmTrial}>
+                <Text>提交试听申请</Text>
+              </Button>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   )
 }
